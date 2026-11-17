@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+$localConfig = dirname(__DIR__) . '/config.local.php';
+if (is_file($localConfig)) {
+    require_once $localConfig;
+}
+
 $isHttps = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off';
 session_name('sena_personal');
 ini_set('session.use_strict_mode', '1');
@@ -40,9 +45,10 @@ function db(): PDO
     $username = app_env('DB_USER');
     $password = app_env('DB_PASS');
 
-    if ($username === false || $password === false) {
-        throw new RuntimeException('Configura DB_USER y DB_PASS en las variables de entorno.');
+    if ($username === false || ($password === false && app_env('APP_ENV') !== 'development')) {
+        throw new RuntimeException('Configura DB_USER y DB_PASS; en desarrollo, DB_PASS puede omitirse si la cuenta MySQL no tiene contraseña.');
     }
+    $password = $password === false ? '' : $password;
 
     $connection = new PDO(
         "mysql:host={$host};dbname={$database};charset=utf8mb4",

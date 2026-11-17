@@ -86,22 +86,3 @@ CREATE TABLE IF NOT EXISTS users (
         ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS contracts (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    instructor_id BIGINT UNSIGNED NOT NULL,
-    contract_number VARCHAR(50) NOT NULL,
-    contract_type VARCHAR(100) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    monthly_value DECIMAL(12, 2) NOT NULL,
-    status ENUM('Activo', 'Suspendido', 'Finalizado') NOT NULL DEFAULT 'Activo',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY uq_contracts_number (contract_number),
-    KEY idx_contracts_status_end_date (status, end_date),
-    CONSTRAINT fk_contracts_instructor
-        FOREIGN KEY (instructor_id) REFERENCES instructors (id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT
-) ENGINE=InnoDB;

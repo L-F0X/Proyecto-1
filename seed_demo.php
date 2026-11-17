@@ -6,53 +6,59 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-if (getenv('APP_ENV') !== 'development' || !in_array('--confirm', $argv ?? [], true)) {
+$localConfig = __DIR__ . '/config.local.php';
+if (is_file($localConfig)) {
+    require_once $localConfig;
+}
+$appEnvironment = getenv('APP_ENV');
+if ($appEnvironment === false) {
+    $appEnvironment = $_SERVER['APP_ENV'] ?? false;
+}
+
+if ($appEnvironment !== 'development' || !in_array('--confirm', $argv ?? [], true)) {
     fwrite(STDERR, "Solo se ejecuta en desarrollo. Define APP_ENV=development y agrega --confirm.\n");
     exit(1);
 }
 
 require __DIR__ . '/includes/app.php';
 
-$today = new DateTimeImmutable('today');
+$demoPasswords = [];
+foreach ([
+    'DEMO_ADMIN_PASSWORD',
+    'DEMO_HR_PASSWORD',
+    'DEMO_LUCIA_PASSWORD',
+    'DEMO_MATEO_PASSWORD',
+    'DEMO_VALENTINA_PASSWORD',
+] as $passwordKey) {
+    $password = app_env($passwordKey);
+    if ($password === false || $password === '') {
+        fwrite(STDERR, 'Configura las contraseñas demo en config.local.php antes de ejecutar el cargador.' . "\n");
+        exit(1);
+    }
+    $demoPasswords[$passwordKey] = $password;
+}
+
 $instructorData = [
     [
         'first_name' => 'Lucía',
         'last_name' => 'Ramírez',
         'email' => 'lucia.ramirez@sena.test',
         'specialty' => 'Diseño y producción multimedia',
-        'contract_number' => 'DEMO-2026-001',
-        'contract_type' => 'Prestación de servicios',
-        'start_date' => $today->modify('-150 days')->format('Y-m-d'),
-        'end_date' => $today->modify('+18 days')->format('Y-m-d'),
-        'monthly_value' => '4200000.00',
-        'status' => 'Activo',
-        'password' => bin2hex(random_bytes(16)),
+        'password' => $demoPasswords['DEMO_LUCIA_PASSWORD'],
     ],
     [
         'first_name' => 'Mateo',
         'last_name' => 'Gómez',
         'email' => 'mateo.gomez@sena.test',
         'specialty' => 'Desarrollo de software',
-        'contract_number' => 'DEMO-2026-002',
-        'contract_type' => 'Prestación de servicios',
-        'start_date' => $today->modify('-90 days')->format('Y-m-d'),
-        'end_date' => $today->modify('+120 days')->format('Y-m-d'),
-        'monthly_value' => '5100000.00',
-        'status' => 'Activo',
-        'password' => bin2hex(random_bytes(16)),
+        'password' => $demoPasswords['DEMO_MATEO_PASSWORD'],
     ],
     [
         'first_name' => 'Valentina',
         'last_name' => 'Cruz',
         'email' => 'valentina.cruz@sena.test',
         'specialty' => 'Gestión administrativa',
-        'contract_number' => 'DEMO-2026-003',
-        'contract_type' => 'Prestación de servicios',
-        'start_date' => $today->modify('-180 days')->format('Y-m-d'),
-        'end_date' => $today->modify('-5 days')->format('Y-m-d'),
-        'monthly_value' => '3900000.00',
-        'status' => 'Finalizado',
-        'password' => bin2hex(random_bytes(16)),
+        'password' => $demoPasswords['DEMO_VALENTINA_PASSWORD'],
     ],
 ];
 
@@ -61,13 +67,13 @@ $managerAccounts = [
         'full_name' => 'Administración de prueba',
         'email' => 'admin.demo@sena.test',
         'role' => 'admin',
-        'password' => bin2hex(random_bytes(16)),
+        'password' => $demoPasswords['DEMO_ADMIN_PASSWORD'],
     ],
     [
         'full_name' => 'Talento Humano de prueba',
         'email' => 'talento.demo@sena.test',
         'role' => 'talento_humano',
-        'password' => bin2hex(random_bytes(16)),
+        'password' => $demoPasswords['DEMO_HR_PASSWORD'],
     ],
 ];
 
@@ -75,39 +81,37 @@ $connection = db();
 $connection->beginTransaction();
 
 try {
-    $findInstructor = $connection->prepare('SELECT id FROM instructors WHERE email = :email');
+    $findInstructor = $connection->prepare('SELECT id FROM instructors WHERE email = :email LIMIT 1');
     $createInstructor = $connection->prepare(
         'INSERT INTO instructors (first_name, last_name, email, specialty)
-         VALUES (:first_name, :last_name, :email, :specialty)
-         ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES(last_name), specialty = VALUES(specialty)'
+         VALUES (:first_name, :last_name, :email, :specialty)'
+    );
+    $updateInstructor = $connection->prepare(
+        'UPDATE instructors SET first_name = :first_name, last_name = :last_name, specialty = :specialty
+         WHERE id = :id'
     );
     $instructorIds = [];
     foreach ($instructorData as $instructor) {
-        $createInstructor->execute([
+        $instructorValues = [
             'first_name' => $instructor['first_name'],
             'last_name' => $instructor['last_name'],
             'email' => $instructor['email'],
             'specialty' => $instructor['specialty'],
-        ]);
+        ];
         $findInstructor->execute(['email' => $instructor['email']]);
-        $instructorIds[$instructor['email']] = (int) $findInstructor->fetchColumn();
-    }
+        $existingInstructorId = $findInstructor->fetchColumn();
+        if ($existingInstructorId === false) {
+            $createInstructor->execute($instructorValues);
+            $instructorIds[$instructor['email']] = (int) $connection->lastInsertId();
+            continue;
+        }
 
-    $createContract = $connection->prepare(
-        'INSERT INTO contracts (instructor_id, contract_number, contract_type, start_date, end_date, monthly_value, status)
-         VALUES (:instructor_id, :contract_number, :contract_type, :start_date, :end_date, :monthly_value, :status)
-         ON DUPLICATE KEY UPDATE instructor_id = VALUES(instructor_id), contract_type = VALUES(contract_type),
-             start_date = VALUES(start_date), end_date = VALUES(end_date), monthly_value = VALUES(monthly_value), status = VALUES(status)'
-    );
-    foreach ($instructorData as $instructor) {
-        $createContract->execute([
-            'instructor_id' => $instructorIds[$instructor['email']],
-            'contract_number' => $instructor['contract_number'],
-            'contract_type' => $instructor['contract_type'],
-            'start_date' => $instructor['start_date'],
-            'end_date' => $instructor['end_date'],
-            'monthly_value' => $instructor['monthly_value'],
-            'status' => $instructor['status'],
+        $instructorIds[$instructor['email']] = (int) $existingInstructorId;
+        $updateInstructor->execute([
+            'first_name' => $instructor['first_name'],
+            'last_name' => $instructor['last_name'],
+            'specialty' => $instructor['specialty'],
+            'id' => $existingInstructorId,
         ]);
     }
 
@@ -148,6 +152,6 @@ try {
     if ($connection->inTransaction()) {
         $connection->rollBack();
     }
-    fwrite(STDERR, 'No se pudieron cargar los datos demo: ' . $exception->getMessage() . "\n");
+    fwrite(STDERR, 'No se pudieron cargar las cuentas demo: ' . $exception->getMessage() . "\n");
     exit(1);
 }

@@ -9,20 +9,16 @@ if (($_SESSION['user']['role'] ?? '') !== 'instructor' || !is_int($_SESSION['use
 }
 
 $statement = db()->prepare(
-    'SELECT i.first_name, i.last_name, i.email, i.specialty,
-            c.contract_number, c.contract_type, c.start_date, c.end_date, c.monthly_value, c.status
-     FROM instructors i
-     LEFT JOIN contracts c ON c.instructor_id = i.id
-     WHERE i.id = :instructor_id
-     ORDER BY c.end_date DESC'
+    'SELECT first_name, last_name, email, specialty
+     FROM instructors
+     WHERE id = :instructor_id'
 );
 $statement->execute(['instructor_id' => $_SESSION['user']['instructor_id']]);
-$records = $statement->fetchAll();
-if (!$records) {
+$instructor = $statement->fetch();
+if (!$instructor) {
     http_response_code(404);
     exit('No se encontró el perfil asociado a esta cuenta.');
 }
-$instructor = $records[0];
 ?>
 <!doctype html>
 <html lang="es">
@@ -41,7 +37,6 @@ $instructor = $records[0];
         <div class="sidebar-label">MI ESPACIO</div>
         <nav class="side-nav" aria-label="Navegación principal">
             <a class="nav-link active" href="#profile"><span class="nav-icon">◎</span> Mi perfil</a>
-            <a class="nav-link" href="#my-contracts"><span class="nav-icon">▤</span> Mis contratos</a>
         </nav>
         <div class="sidebar-footer">
             <div class="security-indicator"><span></span> Sesión protegida</div>
@@ -65,7 +60,7 @@ $instructor = $records[0];
                 <div>
                     <p class="eyebrow">PORTAL DEL INSTRUCTOR</p>
                     <h1>Hola, <?= e($instructor['first_name']) ?></h1>
-                    <p class="muted">Consulta tu información de perfil y tus contratos registrados.</p>
+                    <p class="muted">Consulta tu información de perfil.</p>
                 </div>
             </section>
             <section class="panel">
@@ -74,33 +69,6 @@ $instructor = $records[0];
                     <div><span>Nombre</span><strong><?= e($instructor['first_name'] . ' ' . $instructor['last_name']) ?></strong></div>
                     <div><span>Correo institucional</span><strong><?= e($instructor['email']) ?></strong></div>
                     <div><span>Área / especialidad</span><strong><?= e($instructor['specialty']) ?></strong></div>
-                </div>
-            </section>
-            <section class="panel" id="my-contracts">
-                <div class="panel-heading"><div><p class="eyebrow">INFORMACIÓN LABORAL</p><h2>Mis contratos</h2></div></div>
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>N.º contrato</th><th>Tipo</th><th>Vigencia</th><th>Valor mensual</th><th>Estado</th></tr></thead>
-                        <tbody>
-                        <?php
-                        $hasContract = false;
-                        foreach ($records as $record):
-                            if ($record['contract_number'] === null) {
-                                continue;
-                            }
-                            $hasContract = true;
-                        ?>
-                            <tr>
-                                <td><strong class="contract-number"><?= e($record['contract_number']) ?></strong></td>
-                                <td><?= e($record['contract_type']) ?></td>
-                                <td><?= e(date('d/m/Y', strtotime($record['start_date']))) ?> <span class="date-divider">—</span> <?= e(date('d/m/Y', strtotime($record['end_date']))) ?></td>
-                                <td><?= e(number_format((float) $record['monthly_value'], 0, ',', '.')) ?></td>
-                                <td><span class="status-badge status-<?= e(strtolower($record['status'])) ?>"><?= e($record['status']) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        <?php if (!$hasContract): ?><tr><td class="empty-state" colspan="5">No tienes contratos registrados.</td></tr><?php endif; ?>
-                        </tbody>
-                    </table>
                 </div>
             </section>
             <footer class="page-footer">Datos personales de acceso restringido · SENA Talento Humano</footer>
