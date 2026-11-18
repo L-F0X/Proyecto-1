@@ -4,6 +4,7 @@ require __DIR__ . '/includes/app.php';
 require_manager();
 
 $connection = db();
+$directoryLocation = directory_location();
 $administrativeCount = (int) $connection->query('SELECT COUNT(*) FROM administrative_staff')->fetchColumn();
 $instructorCount = (int) $connection->query('SELECT COUNT(*) FROM instructors')->fetchColumn();
 $stats = [
@@ -32,34 +33,14 @@ $stats = [
             (SELECT COUNT(*) FROM administrative_staff WHERE contract_end_date < CURDATE())
             + (SELECT COUNT(*) FROM instructors WHERE contract_end_date < CURDATE())'
     )->fetchColumn(),
-    'sites' => (int) $connection->query(
-        "SELECT COUNT(*)
-         FROM (
-            SELECT NULLIF(TRIM(site_name), '') AS site_name FROM administrative_staff
-            UNION
-            SELECT NULLIF(TRIM(site_name), '') AS site_name FROM instructors
-         ) AS directory_sites
-         WHERE site_name IS NOT NULL"
-    )->fetchColumn(),
+    'sites' => $directoryLocation['site_name'] === '' ? 0 : 1,
 ];
-$regionalMetrics = $connection->query(
-    "SELECT regional, SUM(administrative_count) AS administrative_count,
-            SUM(instructor_count) AS instructor_count,
-            SUM(administrative_count + instructor_count) AS total
-     FROM (
-        SELECT regional, COUNT(*) AS administrative_count, 0 AS instructor_count
-        FROM administrative_staff
-        WHERE regional IS NOT NULL AND TRIM(regional) <> ''
-        GROUP BY regional
-        UNION ALL
-        SELECT regional, 0 AS administrative_count, COUNT(*) AS instructor_count
-        FROM instructors
-        WHERE regional IS NOT NULL AND TRIM(regional) <> ''
-        GROUP BY regional
-     ) AS regional_totals
-     GROUP BY regional
-     ORDER BY total DESC, regional"
-)->fetchAll();
+$regionalMetrics = $directoryLocation['regional'] === '' ? [] : [[
+    'regional' => $directoryLocation['regional'],
+    'administrative_count' => $administrativeCount,
+    'instructor_count' => $instructorCount,
+    'total' => $stats['total_staff'],
+]];
 $affiliationMetrics = $connection->query(
     "SELECT affiliation_type, COUNT(*) AS total
      FROM (
@@ -84,7 +65,9 @@ require __DIR__ . '/includes/manager_header.php';
                     <h1>Principal</h1>
                     <p class="muted">Indicadores del directorio administrativo e instructor.</p>
                 </div>
-                <a class="button button-primary" href="importar_directorio.php">↑ Importar directorio Excel</a>
+                <?php if (($_SESSION['user']['role'] ?? '') === 'admin'): ?>
+                    <a class="button button-primary" href="importar_directorio.php">↑ Importar directorio Excel</a>
+                <?php endif; ?>
             </section>
 
             <?php if ($flash): ?>

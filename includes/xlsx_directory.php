@@ -35,6 +35,12 @@ function directory_normalize(string $value): string
     return strtolower(trim(preg_replace('/\s+/', ' ', $value) ?? $value));
 }
 
+function directory_clean_contract_number(string $value): string
+{
+    $cleaned = preg_replace('/^\s*n[uú]mero\s+de\s+contrato\s*[:#-]?\s*/iu', '', $value);
+    return trim(ltrim($cleaned ?? $value, " \t\n\r\0\x0B:"));
+}
+
 function directory_column_name(string $cellReference): string
 {
     if (!preg_match('/^([A-Z]+)/', $cellReference, $matches)) {
@@ -69,6 +75,8 @@ function directory_cell_value(SimpleXMLElement $cell, array $sharedStrings): str
 function directory_parse_excel_date(string $value): ?string
 {
     $value = trim($value);
+    $value = preg_replace('/\s*[-–—]+\s*$/u', '', $value) ?? $value;
+    $value = trim($value, " \t\n\r\0\x0B.;");
     if ($value === '') {
         return null;
     }
@@ -87,6 +95,46 @@ function directory_parse_excel_date(string $value): ?string
         $errors = DateTimeImmutable::getLastErrors();
         if ($date && ($errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0))) {
             return $date->format('Y-m-d');
+        }
+    }
+
+    $normalized = directory_normalize($value);
+    $months = [
+        'enero' => 1,
+        'febrero' => 2,
+        'marzo' => 3,
+        'abril' => 4,
+        'mayo' => 5,
+        'junio' => 6,
+        'julio' => 7,
+        'agosto' => 8,
+        'septiembre' => 9,
+        'setiembre' => 9,
+        'octubre' => 10,
+        'noviembre' => 11,
+        'diciembre' => 12,
+    ];
+    $textualDatePatterns = [
+        '/^([0-9]{1,2})\s+de\s+([a-z]+)\s+de\s+([0-9]{4})$/',
+        '/^([a-z]+)\s+([0-9]{1,2})\s+de\s+([0-9]{4})$/',
+        '/^([0-9]{1,2})\s+([a-z]+)\s+([0-9]{4})$/',
+        '/^([0-9]{1,2})\s+de\s+([a-z]+)\s+([0-9]{4})$/',
+    ];
+    foreach ($textualDatePatterns as $index => $pattern) {
+        if (!preg_match($pattern, $normalized, $matches)) {
+            continue;
+        }
+
+        if ($index === 1) {
+            $month = $months[$matches[1]] ?? null;
+            $day = (int) $matches[2];
+        } else {
+            $day = (int) $matches[1];
+            $month = $months[$matches[2]] ?? null;
+        }
+        $year = (int) $matches[3];
+        if ($month !== null && checkdate($month, $day, $year)) {
+            return sprintf('%04d-%02d-%02d', $year, $month, $day);
         }
     }
 
@@ -129,10 +177,6 @@ function directory_find_header(array $rows): array
                 'affiliation_type' => static fn (string $value): bool => str_contains($value, 'tipo de vinculacion'),
                 'job_title' => static fn (string $value): bool => $value === 'cargo',
                 'supervisor' => static fn (string $value): bool => str_contains($value, 'supervisor') || str_contains($value, 'jefe inmediato'),
-                'site_name' => static fn (string $value): bool => $value === 'nombre sede',
-                'site_address' => static fn (string $value): bool => str_contains($value, 'direccion sede'),
-                'site_id' => static fn (string $value): bool => $value === 'id sede',
-                'regional' => static fn (string $value): bool => $value === 'regional',
                 'contract_number' => static fn (string $value): bool => $value === 'numero de contrato',
                 'vpn_access' => static fn (string $value): bool => $value === 'vpn',
                 'extension_ip' => static fn (string $value): bool => str_contains($value, 'numero ext'),
@@ -267,7 +311,8 @@ function read_directory_workbook(string $path): array
                     continue;
                 }
 
-                $role = directory_normalize($row[$columns['role_name']] ?? '');
+                $sourceRole = trim($row[$columns['role_name']] ?? '');
+                $role = directory_normalize($sourceRole);
                 if ($role !== strtolower($expectedRole)) {
                     $report['skipped_unclassified']++;
                     continue;
@@ -286,6 +331,12 @@ function read_directory_workbook(string $path): array
                     $email = null;
                     $report['missing_institutional_email']++;
                 }
+                $jobTitle = trim($row[$columns['job_title']] ?? '');
+                $contractorRole = directory_normalize($jobTitle) === 'contratista';
+                if ($contractorRole) {
+                    $jobTitle = $sourceRole;
+                }
+                $classificationField = $sheetName === 'Administrativos' ? 'dependency' : 'area';
                 $contractEnd = null;
                 $invalidContractDate = false;
                 if ($columns['contract_end_date']) {
@@ -301,19 +352,15 @@ function read_directory_workbook(string $path): array
                     'first_name' => $firstName,
                     'last_name' => $lastName,
                     'email' => $email,
-                    'specialty' => trim($row[$columns['job_title']] ?? ''),
+                    'specialty' => $jobTitle,
                     'document_number' => $documentNumber,
                     'phone' => trim($row[$columns['phone']] ?? ''),
                     'personal_email' => trim($row[$columns['personal_email']] ?? ''),
                     'affiliation_type' => trim($row[$columns['affiliation_type']] ?? ''),
-                    'job_title' => trim($row[$columns['job_title']] ?? ''),
-                    'role_name' => $expectedRole,
-                    'supervisor' => trim($row[$columns['supervisor']] ?? ''),
-                    'site_name' => trim($row[$columns['site_name']] ?? ''),
-                    'site_address' => trim($row[$columns['site_address']] ?? ''),
-                    'site_id' => trim($row[$columns['site_id']] ?? ''),
-                    'regional' => trim($row[$columns['regional']] ?? ''),
-                    'contract_number' => trim($row[$columns['contract_number']] ?? ''),
+                    'job_title' => $jobTitle,
+                    $classificationField => $contractorRole ? '' : $expectedRole,
+                    'supervisor' => $sheetName === 'Administrativos' ? trim($row[$columns['supervisor']] ?? '') : '',
+                    'contract_number' => directory_clean_contract_number(trim($row[$columns['contract_number']] ?? '')),
                     'contract_end_date' => $contractEnd,
                     'contract_end_date_raw' => $invalidContractDate ? trim($row[$columns['contract_end_date']] ?? '') : null,
                     'vpn_access' => trim($row[$columns['vpn_access']] ?? ''),
@@ -333,11 +380,8 @@ function read_directory_workbook(string $path): array
                     'personal_email' => 190,
                     'affiliation_type' => 100,
                     'job_title' => 150,
-                    'role_name' => 50,
+                    $classificationField => 50,
                     'supervisor' => 150,
-                    'site_name' => 150,
-                    'site_id' => 50,
-                    'regional' => 100,
                     'contract_number' => 80,
                     'contract_end_date_raw' => 50,
                     'vpn_access' => 100,

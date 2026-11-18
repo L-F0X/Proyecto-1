@@ -44,6 +44,7 @@ $instructorData = [
         'last_name' => 'Ramírez',
         'email' => 'lucia.ramirez@sena.test',
         'specialty' => 'Diseño y producción multimedia',
+        'job_title' => 'Instructor',
         'password' => $demoPasswords['DEMO_LUCIA_PASSWORD'],
     ],
     [
@@ -51,6 +52,7 @@ $instructorData = [
         'last_name' => 'Gómez',
         'email' => 'mateo.gomez@sena.test',
         'specialty' => 'Desarrollo de software',
+        'job_title' => 'Instructor',
         'password' => $demoPasswords['DEMO_MATEO_PASSWORD'],
     ],
     [
@@ -58,6 +60,7 @@ $instructorData = [
         'last_name' => 'Cruz',
         'email' => 'valentina.cruz@sena.test',
         'specialty' => 'Gestión administrativa',
+        'job_title' => 'Instructor',
         'password' => $demoPasswords['DEMO_VALENTINA_PASSWORD'],
     ],
 ];
@@ -83,12 +86,13 @@ $connection->beginTransaction();
 try {
     $findInstructor = $connection->prepare('SELECT id FROM instructors WHERE email = :email LIMIT 1');
     $createInstructor = $connection->prepare(
-        'INSERT INTO instructors (first_name, last_name, email, specialty)
-         VALUES (:first_name, :last_name, :email, :specialty)'
+        "INSERT INTO instructors (first_name, last_name, email, specialty, job_title, area)
+         VALUES (:first_name, :last_name, :email, :specialty, :job_title, '')"
     );
     $updateInstructor = $connection->prepare(
-        'UPDATE instructors SET first_name = :first_name, last_name = :last_name, specialty = :specialty
-         WHERE id = :id'
+        "UPDATE instructors SET first_name = :first_name, last_name = :last_name, specialty = :specialty,
+             job_title = :job_title, area = ''
+         WHERE id = :id"
     );
     $instructorIds = [];
     foreach ($instructorData as $instructor) {
@@ -97,6 +101,7 @@ try {
             'last_name' => $instructor['last_name'],
             'email' => $instructor['email'],
             'specialty' => $instructor['specialty'],
+            'job_title' => $instructor['job_title'],
         ];
         $findInstructor->execute(['email' => $instructor['email']]);
         $existingInstructorId = $findInstructor->fetchColumn();
@@ -111,6 +116,7 @@ try {
             'first_name' => $instructor['first_name'],
             'last_name' => $instructor['last_name'],
             'specialty' => $instructor['specialty'],
+            'job_title' => $instructor['job_title'],
             'id' => $existingInstructorId,
         ]);
     }

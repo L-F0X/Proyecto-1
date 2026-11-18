@@ -69,6 +69,16 @@ function e(string|int|float|null $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function directory_location(): array
+{
+    return [
+        'site_name' => 'Apartadó Complejo Tecnológico Agroindustrial, Pecuario Y Turístico',
+        'site_address' => 'Kilometro 1 Salida Turbo',
+        'site_id' => '18',
+        'regional' => 'Antioquia',
+    ];
+}
+
 function csrf_token(): string
 {
     if (!isset($_SESSION['csrf_token'])) {
@@ -110,6 +120,15 @@ function require_manager(): void
     if (!in_array($_SESSION['user']['role'] ?? '', ['admin', 'talento_humano'], true)) {
         http_response_code(403);
         exit('No tienes permisos para realizar esta acción.');
+    }
+}
+
+function require_directory_viewer(): void
+{
+    require_login();
+    if (!in_array($_SESSION['user']['role'] ?? '', ['admin', 'talento_humano', 'instructor'], true)) {
+        http_response_code(403);
+        exit('No tienes permisos para consultar el directorio.');
     }
 }
 

@@ -19,44 +19,11 @@ if (!$instructor) {
     http_response_code(404);
     exit('No se encontró el perfil asociado a esta cuenta.');
 }
+$managerPageTitle = 'Mi perfil';
+$activeManagerPage = 'mi_perfil';
+require __DIR__ . '/includes/manager_header.php';
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Mi perfil | SENA</title>
-    <link rel="stylesheet" href="assets/css/style.css">
-</head>
-<body class="app-page">
-    <aside class="sidebar">
-        <a class="brand" href="mi_perfil.php">
-            <span class="brand-mark">S</span>
-            <span><strong>SENA</strong><small>Portal del instructor</small></span>
-        </a>
-        <div class="sidebar-label">MI ESPACIO</div>
-        <nav class="side-nav" aria-label="Navegación principal">
-            <a class="nav-link active" href="#profile"><span class="nav-icon">◎</span> Mi perfil</a>
-        </nav>
-        <div class="sidebar-footer">
-            <div class="security-indicator"><span></span> Sesión protegida</div>
-            <p>Solo puedes consultar la información asociada a tu perfil.</p>
-        </div>
-    </aside>
-    <main class="main-content" id="profile">
-        <header class="topbar">
-            <div class="breadcrumb">Portal del instructor <span>/</span> Mi perfil</div>
-            <div class="account">
-                <span class="avatar"><?= e(mb_strtoupper(mb_substr($instructor['first_name'], 0, 1))) ?></span>
-                <span class="account-name"><?= e($_SESSION['user']['name']) ?></span>
-                <form action="logout.php" method="post">
-                    <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                    <button class="button-quiet" type="submit">Salir</button>
-                </form>
-            </div>
-        </header>
-        <div class="page-wrap">
-            <section class="page-heading">
+            <section class="page-heading" id="profile">
                 <div>
                     <p class="eyebrow">PORTAL DEL INSTRUCTOR</p>
                     <h1>Hola, <?= e($instructor['first_name']) ?></h1>
@@ -71,8 +38,4 @@ if (!$instructor) {
                     <div><span>Área / especialidad</span><strong><?= e($instructor['specialty']) ?></strong></div>
                 </div>
             </section>
-            <footer class="page-footer">Datos personales de acceso restringido · SENA Talento Humano</footer>
-        </div>
-    </main>
-</body>
-</html>
+<?php require __DIR__ . '/includes/manager_footer.php'; ?>

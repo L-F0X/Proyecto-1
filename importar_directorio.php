@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require __DIR__ . '/includes/app.php';
 require __DIR__ . '/includes/xlsx_directory.php';
-require_manager();
+require_admin();
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -40,18 +40,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Ya hay filas importadas desde Excel. No se repitió la importación para evitar sobrescribir registros.');
             }
 
-            $columns = [
+            $commonColumns = [
                 'first_name', 'last_name', 'email', 'specialty', 'document_number',
-                'phone', 'personal_email', 'affiliation_type', 'job_title', 'role_name',
-                'supervisor', 'site_name', 'site_address', 'site_id', 'regional',
-                'contract_number', 'contract_end_date', 'contract_end_date_raw',
+                'phone', 'personal_email', 'affiliation_type', 'job_title',
+                'supervisor', 'contract_number', 'contract_end_date', 'contract_end_date_raw',
                 'vpn_access', 'extension_ip', 'source_row', 'duplicate_in_source',
                 'duplicate_with_other_category', 'invalid_contract_date',
             ];
-            $columnSql = implode(', ', $columns);
-            $valueSql = implode(', ', array_map(static fn (string $column): string => ':' . $column, $columns));
-            $instructorInsert = $connection->prepare("INSERT INTO instructors ({$columnSql}) VALUES ({$valueSql})");
-            $administrativeInsert = $connection->prepare("INSERT INTO administrative_staff ({$columnSql}) VALUES ({$valueSql})");
+            $prepareImport = static function (string $table, string $classificationField) use ($connection, $commonColumns): PDOStatement {
+                $columns = array_merge(
+                    array_slice($commonColumns, 0, 9),
+                    [$classificationField],
+                    array_slice($commonColumns, 9)
+                );
+                $columnSql = implode(', ', $columns);
+                $valueSql = implode(', ', array_map(static fn (string $column): string => ':' . $column, $columns));
+                return $connection->prepare("INSERT INTO {$table} ({$columnSql}) VALUES ({$valueSql})");
+            };
+            $instructorInsert = $prepareImport('instructors', 'area');
+            $administrativeInsert = $prepareImport('administrative_staff', 'dependency');
 
             foreach ($instructorRows as $record) {
                 $instructorInsert->execute($record);
